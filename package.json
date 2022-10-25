@@ -13,7 +13,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js",
+    "devstart": "nodemon app.js"
   },
   "repository": {
     "type": "git",
@@ -24,5 +26,8 @@
   "bugs": {
     "url": "https://github.com/BryanU1/matchmaking-authentication/issues"
   },
-  "homepage": "https://github.com/BryanU1/matchmaking-authentication#readme"
+  "homepage": "https://github.com/BryanU1/matchmaking-authentication#readme",
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  }
 }
