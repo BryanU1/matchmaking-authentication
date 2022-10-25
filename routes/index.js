@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const user_controller = require('../controllers/userController');
 const passport = require('passport');
-const { Router } = require('express');
 
 router.get('/', function(req, res, next) {
   res.render('index', {user: req.user});
