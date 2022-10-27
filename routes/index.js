@@ -1,27 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const user_controller = require('../controllers/userController');
-const passport = require('passport');
 
-router.get('/', function(req, res, next) {
-  res.render('index', {user: req.user});
-})
+router.get('/', 
+user_controller.user_login_get);
 
-router.post('/log-in', passport.authenticate('local', {
-  successRedirect: '/',
-  failureRedirect: '/'
-}));
+router.post('/log-in', 
+user_controller.user_login_post);
 
-router.get('/log-out', (req, res, next) => {
-  req.logout(function(err) {
-    if (err) {
-      return next(err);
-    }
-    res.redirect('/');
-  });
-});
+router.get('/log-in/success',
+user_controller.user_login_success);
 
-router.get('/sign-up', (req, res) => res.render('sign-up-form'));
+router.get('/log-in/fail', 
+user_controller.user_login_fail);
+
+router.get('/log-out',
+user_controller.user_logout);
+
+router.get('/sign-up', 
+user_controller.user_create_get);
 
 router.post('/sign-up',
 user_controller.user_create_post);

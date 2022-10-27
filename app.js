@@ -8,7 +8,7 @@ require('dotenv').config();
 const indexRouter = require('./routes/index');
 const User = require('./models/user.js');
 const bcrypt = require('bcryptjs');
-const { nextTick } = require('process');
+const cors = require('cors');
 
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
@@ -49,6 +49,7 @@ passport.deserializeUser(function(id, done) {
   });
 });
 
+app.use(cors());
 app.use(session({ secret: "cats", resave: false, saveUninitialized: true }));
 app.use(passport.initialize());
 app.use(passport.session());
