@@ -5,14 +5,11 @@ const user_controller = require('../controllers/userController');
 router.get('/', 
 user_controller.user_login_get);
 
+router.get('/user',
+user_controller.current_user);
+
 router.post('/log-in', 
-user_controller.user_login_post);
-
-router.get('/log-in/success',
-user_controller.user_login_success);
-
-router.get('/log-in/fail', 
-user_controller.user_login_fail);
+user_controller.user_log_in_post);
 
 router.get('/log-out',
 user_controller.user_logout);
