@@ -4,6 +4,7 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const indexRouter = require('./routes/index');
+const apiRouter = require('./routes/api');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
@@ -25,5 +26,6 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 
 app.use('/', indexRouter);
+app.use('/api', apiRouter);
 
 app.listen(5000, () => console.log("app listening on port 5000!"));

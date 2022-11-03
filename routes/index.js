@@ -5,9 +5,6 @@ const user_controller = require('../controllers/userController');
 router.get('/', 
 user_controller.user_login_get);
 
-router.get('/user',
-user_controller.current_user);
-
 router.post('/log-in', 
 user_controller.user_login_post);
 

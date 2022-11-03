@@ -60,6 +60,9 @@ exports.user_login_post = (req, res, next) => {
   })
 }
 
+
+// API Routes
+
 exports.current_user = (req, res) => {
   jwt.verify(
     req.token, 
