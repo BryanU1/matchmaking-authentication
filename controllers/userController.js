@@ -60,17 +60,6 @@ exports.user_login_post = (req, res, next) => {
   })
 }
 
-exports.user_login_success = (req, res) => {
-  res.redirect('http://localhost:3000');
-} 
-
-exports.user_login_fail = (req, res) => {
-  res.status(400).json({
-    status: 400,
-    message: 'Incorrect username or password '
-  })
-}
-
 exports.current_user = (req, res) => {
   jwt.verify(
     req.token, 
