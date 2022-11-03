@@ -9,7 +9,7 @@ router.get('/user',
 user_controller.current_user);
 
 router.post('/log-in', 
-user_controller.user_log_in_post);
+user_controller.user_login_post);
 
 router.get('/log-out',
 user_controller.user_logout);

@@ -13,7 +13,8 @@ exports.user_create_post = (req, res, next) => {
     }
     const user = new User({
       username: req.body.username,
-      password: hashedPassword
+      password: hashedPassword,
+      displayName: req.body.username
     }).save(err => {
       if (err) {
         return next(err);
@@ -27,7 +28,7 @@ exports.user_login_get = function(req, res, next) {
   res.render('index', {user: req.user});
 }
 
-exports.user_log_in_post = (req, res, next) => {
+exports.user_login_post = (req, res, next) => {
   User.findOne({username: req.body.username}, (err, account) => {
     if (err) {
       return next(err);
