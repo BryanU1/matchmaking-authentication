@@ -44,7 +44,8 @@ exports.user_login_post = (req, res, next) => {
         // passwords match! log user in
         const user = {
           id: account._id,
-          username: account.username
+          username: account.username,
+          displayName: account.displayName
         }
 
         jwt.sign({user}, process.env.SECRET_KEY, (err, token) => {
