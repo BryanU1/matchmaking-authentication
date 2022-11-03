@@ -3,6 +3,7 @@ const router = express.Router();
 const user_controller = require('../controllers/userController');
 
 router.get('/profile',
+user_controller.verifyToken,
 user_controller.current_user);
 
 module.exports = router;
