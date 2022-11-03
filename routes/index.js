@@ -11,9 +11,6 @@ user_controller.current_user);
 router.post('/log-in', 
 user_controller.user_login_post);
 
-router.get('/log-out',
-user_controller.user_logout);
-
 router.get('/sign-up', 
 user_controller.user_create_get);
 
