@@ -49,9 +49,7 @@ exports.user_login_post = (req, res, next) => {
         }
 
         jwt.sign({user}, process.env.SECRET_KEY, (err, token) => {
-          return res.json({
-            token
-          });
+          return res.json({token});
         })
       } else {
         // passwords do not match!
