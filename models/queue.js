@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 
 const QueueSchema = new Schema(
   {
-    players: [{type: Object}],
+    players: [{type: Schema.Types.ObjectId, ref: 'User'}],
     mode: {type: String}
   }
 );

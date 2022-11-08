@@ -4,6 +4,6 @@ const user_controller = require('../controllers/userController');
 
 router.get('/profile',
 user_controller.verifyToken,
-user_controller.current_user);
+user_controller.profile_get);
 
 module.exports = router;

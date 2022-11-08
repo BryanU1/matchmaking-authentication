@@ -59,6 +59,21 @@ exports.user_login_post = (req, res, next) => {
   })
 }
 
+exports.current_user = (req, res, next) => {
+  jwt.verify(
+    req.token, 
+    process.env.SECRET_KEY, 
+    (err, authData) => {
+      if (err) {
+        res.status(403);
+      } else {
+        req.authData = authData;
+        next();
+      }
+    }
+  )
+}
+
 exports.verifyToken = (req, res, next) => {
   const bearerHeader = req.headers['authorization'];
   if (typeof bearerHeader !== 'undefined') {
@@ -71,7 +86,7 @@ exports.verifyToken = (req, res, next) => {
 
 // API Routes
 
-exports.current_user = (req, res) => {
+exports.profile_get = (req, res) => {
   jwt.verify(
     req.token, 
     process.env.SECRET_KEY, 
