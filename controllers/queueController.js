@@ -3,7 +3,6 @@ const Queue = require('../models/queue');
 // Add player to queue
 
 exports.join_queue_get = (req, res, next) => {
-  console.log(req.authData.user.displayName)
   Queue.findOneAndUpdate(
     {mode: 'classic'}, 
     {$push: 
