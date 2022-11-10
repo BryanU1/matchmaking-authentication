@@ -70,13 +70,6 @@ io.on('connection', function(socket) {
         }
       }
     )
-
-    //  emit 'game create' to game room
-  })
-
-  socket.on('game created', (data) => {
-    // emit 'match found'
-    console.log(data);
   })
 
   socket.on('disconnect', function() {
