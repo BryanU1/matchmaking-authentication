@@ -41,9 +41,9 @@ app.use('/api', apiRouter);
 io.on('connection', function(socket) {
   console.log('user connected: ' + socket.id);
 
-  socket.on('join queue', (response) => {
+  socket.on('join queue', (token) => {
     jwt.verify(
-      response.token,
+      token,
       process.env.SECRET_KEY,
       async (err, authData) => {
         if (err) {
