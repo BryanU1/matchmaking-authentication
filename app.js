@@ -18,8 +18,7 @@ const apiRouter = require('./routes/api');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
-const { query } = require('express');
-const { emit } = require('process');
+const jwt = require('jsonwebtoken');
 
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
@@ -39,26 +38,39 @@ app.use(cookieParser());
 app.use('/', indexRouter);
 app.use('/api', apiRouter);
 
-io.on('connection', async function(socket) {
-  console.log('user connected: ' + socket.id)
+io.on('connection', function(socket) {
+  console.log('user connected: ' + socket.id);
 
-  socket.on('join queue', async (response) => {
-    console.log(response + ': ' + socket.id);
-    // Join waiting room
-    socket.join("waiting room");
+  socket.on('join queue', (response) => {
+    jwt.verify(
+      response.token,
+      process.env.SECRET_KEY,
+      async (err, authData) => {
+        if (err) {
+          console.log(err);
+          return;
+        }
+
+        socket.data.user = authData.user;
+
+        // Join waiting room
+        socket.join("waiting room");
+        
+        const sockets = await io.in("waiting room").fetchSockets();
     
-    const sockets = await io.in("waiting room").fetchSockets();
-
-    if (sockets.length >= 2) {
-      pairing(socket, sockets);
-
-      const waiting = await io.in("waiting room").fetchSockets();
-
-      console.log('users in waiting room:')
-      for (const user of waiting) {
-        console.log(user.id);
+        if (sockets.length >= 2) {
+          pairing(socket, sockets);
+    
+          const waiting = await io.in("waiting room").fetchSockets();
+    
+          console.log('users in waiting room:')
+          for (const user of waiting) {
+            console.log(user.data.user.id);
+          }
+        }
       }
-    }
+    )
+
     //  emit 'game create' to game room
   })
 
@@ -70,6 +82,7 @@ io.on('connection', async function(socket) {
   socket.on('disconnect', function() {
     console.log('A user disconnected');
   })
+
 })
 
 async function pairing(socket, socketsList) {
@@ -83,7 +96,7 @@ async function pairing(socket, socketsList) {
   
   console.log('users in game room:')
   for (const player of players) {
-    console.log(player.id);
+    console.log(player.data.user.id);
   }
 }
 
