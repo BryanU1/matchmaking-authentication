@@ -18,6 +18,8 @@ const apiRouter = require('./routes/api');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
+const { query } = require('express');
+const { emit } = require('process');
 
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
@@ -37,12 +39,52 @@ app.use(cookieParser());
 app.use('/', indexRouter);
 app.use('/api', apiRouter);
 
-io.on('connection', function(socket) {
-  console.log('A user connected');
+io.on('connection', async function(socket) {
+  console.log('user connected: ' + socket.id)
+
+  socket.on('join queue', async (response) => {
+    console.log(response + ': ' + socket.id);
+    // Join waiting room
+    socket.join("waiting room");
+    
+    const sockets = await io.in("waiting room").fetchSockets();
+
+    if (sockets.length >= 2) {
+      pairing(socket, sockets);
+
+      const waiting = await io.in("waiting room").fetchSockets();
+
+      console.log('users in waiting room:')
+      for (const user of waiting) {
+        console.log(user.id);
+      }
+    }
+    //  emit 'game create' to game room
+  })
+
+  socket.on('game created', (data) => {
+    // emit 'match found'
+    console.log(data);
+  })
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
   })
 })
+
+async function pairing(socket, socketsList) {
+  socket.leave("waiting room")
+  socketsList[0].leave("waiting room");
+
+  socket.join("game room");
+  socketsList[0].join("game room");
+
+  const players = await io.in("game room").fetchSockets();
+  
+  console.log('users in game room:')
+  for (const player of players) {
+    console.log(player.id);
+  }
+}
 
 server.listen(5000, () => console.log("app listening on port 5000!"));
