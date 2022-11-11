@@ -67,6 +67,8 @@ io.on('connection', function(socket) {
           for (const user of waiting) {
             console.log(user.data.user.id);
           }
+
+          io.to('game room').emit('stop queue');
         }
       }
     )
