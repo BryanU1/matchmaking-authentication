@@ -13,14 +13,17 @@ const path = require('path');
 const session = require('express-session');
 const mongoose = require('mongoose');
 require('dotenv').config();
-const indexRouter = require('./routes/index');
-const apiRouter = require('./routes/api');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const EventEmitter = require("events").EventEmitter;
 const ee = new EventEmitter();
+
+const indexRouter = require('./routes/index');
+const apiRouter = require('./routes/api');
+
+const Match = require('./models/match');
 
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
@@ -52,44 +55,39 @@ io.on('connection', function(socket) {
           console.log(err);
           return;
         }
-        // If first in queue, then move to 'pairing' room
-        // If second in queue, then emit to 'pairing' room
-        // move first and second socket to a live match room
-        // emit event to waiting room
-
         socket.data.user = authData.user;
-
+        
         // Join waiting room
         socket.join("waiting room");
         
         const sockets = await io.in("waiting room").fetchSockets();
-
         if (sockets.length == 2) {
-          setTimeout(async () => {
-            pairing(socket, sockets);
-            const waiting = await io.in("waiting room").fetchSockets();
-      
-            console.log('users in waiting room:')
-            for (const user of waiting) {
-              console.log(user.data.user.username);
-            }
-  
-            ee.emit('trigger pairing');
-  
-            io.to('game room').emit('stop queue');
-          }, 5000)
+          ee.emit('trigger pairing');
+
+          // Print the remaining users in the waiting room
+          const waiting = await io.in("waiting room").fetchSockets();
+          console.log('users in waiting room:')
+          for (const user of waiting) {
+            console.log(user.data.user.username);
+          }
+
+          io.to('game room').emit('stop queue');
         }
       }
     )
   })
 
+  socket.on('leave queue', async () => {
+    socket.leave('waiting room');
+  })
+
   ee.on('trigger pairing', async () => {
     const sockets = await io.in('waiting room').fetchSockets();
-    if (sockets.length >= 2 && sockets[1].id == socket.id) {
+    if (sockets.length >= 2 && sockets[0].id == socket.id) {
       pairing(socket, sockets);
       const waiting = await io.in("waiting room").fetchSockets();
 
-      console.log('users in waiting room:')
+      console.log('users in waiting room:');
       for (const user of waiting) {
         console.log(user.data.user.username);
       }
@@ -108,10 +106,24 @@ io.on('connection', function(socket) {
 
 async function pairing(socket, socketsList) {
   socket.leave("waiting room")
-  socketsList[0].leave("waiting room");
+  socketsList[1].leave("waiting room");
+
+  // move the first and second socket to another room
+  // create a lobby using the 
+  // move the paired users to the lobby
+  // emit event to client to ask for player ready status
+  // have an event listener for players' ready status from client
+  //    if ready, 
+  //        then put in players ready status
+  //        check if everyone is ready
+  //        move to another match room
+  //    else, 
+  //        reset everyones ready status to false
+  //        put the ready player back in to the waiting room
+  // 
 
   socket.join("game room");
-  socketsList[0].join("game room");
+  socketsList[1].join("game room");
 
   const players = await io.in("game room").fetchSockets();
   
