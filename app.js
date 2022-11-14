@@ -19,6 +19,7 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const EventEmitter = require("events").EventEmitter;
 const ee = new EventEmitter();
+const uniqid = require('uniqid');
 
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
@@ -56,22 +57,11 @@ io.on('connection', function(socket) {
           return;
         }
         socket.data.user = authData.user;
+        socket.join('waiting room');
         
-        // Join waiting room
-        socket.join("waiting room");
-        
-        const sockets = await io.in("waiting room").fetchSockets();
+        const sockets = await io.in('waiting room').fetchSockets();
         if (sockets.length == 2) {
           ee.emit('trigger pairing');
-
-          // Print the remaining users in the waiting room
-          const waiting = await io.in("waiting room").fetchSockets();
-          console.log('users in waiting room:')
-          for (const user of waiting) {
-            console.log(user.data.user.username);
-          }
-
-          io.to('game room').emit('stop queue');
         }
       }
     )
@@ -85,18 +75,21 @@ io.on('connection', function(socket) {
     const sockets = await io.in('waiting room').fetchSockets();
     if (sockets.length >= 2 && sockets[0].id == socket.id) {
       pairing(socket, sockets);
-      const waiting = await io.in("waiting room").fetchSockets();
 
+      // Print remaining players in queue
+      const waiting = await io.in('waiting room').fetchSockets();
       console.log('users in waiting room:');
       for (const user of waiting) {
         console.log(user.data.user.username);
       }
 
       ee.emit('trigger pairing');
-
-      io.to('game room').emit('stop queue');
     }
   })
+
+  socket.on('ready status', (response) => {
+    console.log('not implemented yet')
+  })  
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
@@ -105,29 +98,18 @@ io.on('connection', function(socket) {
 })
 
 async function pairing(socket, socketsList) {
-  socket.leave("waiting room")
-  socketsList[1].leave("waiting room");
+  const id = uniqid();
+  socket.leave('waiting room')
+  socketsList[1].leave('waiting room');
 
-  // move the first and second socket to another room
-  // create a lobby using the 
-  // move the paired users to the lobby
-  // emit event to client to ask for player ready status
-  // have an event listener for players' ready status from client
-  //    if ready, 
-  //        then put in players ready status
-  //        check if everyone is ready
-  //        move to another match room
-  //    else, 
-  //        reset everyones ready status to false
-  //        put the ready player back in to the waiting room
-  // 
+  socket.join(`lobby_${id}`);
+  socketsList[1].join(`lobby_${id}`);
 
-  socket.join("game room");
-  socketsList[1].join("game room");
+  io.to(`lobby_${id}`).emit('stop queue');
 
-  const players = await io.in("game room").fetchSockets();
-  
-  console.log('users in game room:')
+  // Print players in newly formed lobby
+  const players = await io.in(`lobby_${id}`).fetchSockets();
+  console.log(`users in lobby_${id}:`)
   for (const player of players) {
     console.log(player.data.user.username);
   }
