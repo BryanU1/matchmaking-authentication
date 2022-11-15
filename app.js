@@ -87,8 +87,28 @@ io.on('connection', function(socket) {
     }
   })
 
-  socket.on('ready status', (response) => {
-    console.log('not implemented yet')
+  socket.on('check player status', async (isReady, id) => {
+    const sockets = await io.to(`lobby_${id}`).fetchSockets();
+    socket.data.user.isReady = isReady;
+    
+    // if player is ready, check other player
+    if (isReady) {
+      for (const player of sockets) {
+        if (!player.data.user.isReady) {
+          return;
+        }
+      }  
+      // move everyone to a live match room
+      io.in(`lobby_${id}`).socketsJoin(`match_${id}`);
+      io.in(`match_${id}`).socketsLeave(`lobby_${id}`);
+
+      io.to(`match_${id}`).emit('start match')
+    }
+    // if player is not ready, emit match cancelled
+    if (!isReady) {
+      io.in(`lobby_${id}`).emit('cancel match');
+      io.socketsLeave(`lobby_${id}`);
+    }
   })  
 
   socket.on('disconnect', function() {
@@ -105,7 +125,7 @@ async function pairing(socket, socketsList) {
   socket.join(`lobby_${id}`);
   socketsList[1].join(`lobby_${id}`);
 
-  io.to(`lobby_${id}`).emit('stop queue');
+  io.to(`lobby_${id}`).emit('match found', id);
 
   // Print players in newly formed lobby
   const players = await io.in(`lobby_${id}`).fetchSockets();
