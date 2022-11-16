@@ -12,6 +12,7 @@
     "mongoose": "^6.6.7",
     "passport": "^0.6.0",
     "passport-local": "^1.0.0",
+    "random-words": "^1.2.0",
     "socket.io": "^4.5.3",
     "uniqid": "^5.4.0"
   },

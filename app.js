@@ -20,6 +20,7 @@ const jwt = require('jsonwebtoken');
 const EventEmitter = require("events").EventEmitter;
 const ee = new EventEmitter();
 const uniqid = require('uniqid');
+const randomWords = require('random-words');
 
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
@@ -101,6 +102,25 @@ io.on('connection', function(socket) {
       // move everyone to a live match room
       io.in(`lobby_${id}`).socketsJoin(`match_${id}`);
       io.in(`match_${id}`).socketsLeave(`lobby_${id}`);
+
+      // Generate random 5 letter word
+      let word;
+      let rightLength = false;
+      while (!rightLength) {
+        word = randomWords();
+        if (word.length == 5) {
+          rightLength = true;
+        }
+      }
+
+      // Add match document to mongodb
+      const match = {
+        match_id: id,
+        word,
+        player1: sockets[0].data.user,
+        player2: sockets[1].data.user,
+        date: new Date()
+      }
 
       io.to(`match_${id}`).emit('start match')
     }
