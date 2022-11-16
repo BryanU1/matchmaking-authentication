@@ -21,6 +21,7 @@ const EventEmitter = require("events").EventEmitter;
 const ee = new EventEmitter();
 const uniqid = require('uniqid');
 const randomWords = require('random-words');
+const dateFormat = require('dateformat');
 
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
@@ -103,7 +104,7 @@ io.on('connection', function(socket) {
       // Move everyone to a live match room
       io.in(`lobby_${id}`).socketsJoin(`match_${id}`);
       io.in(`match_${id}`).socketsLeave(`lobby_${id}`);
-
+      
       // Generate random 5 letter word
       let word;
       let rightLength = false;
@@ -113,20 +114,26 @@ io.on('connection', function(socket) {
           rightLength = true;
         }
       }
-
+      
       let players = [];
       players.push(sockets[0].data.user);
       players.push(sockets[1].data.user);
 
+      const now = new Date();
       // Add match document to mongodb
-      const match = {
+      const match = new Match({
         match_id: id,
         word,
         players,
-        date: new Date()
-      }
+        date: dateFormat(now, 'mm/dd/yy')
+      })
 
-      io.to(`match_${id}`).emit('start match')
+      match.save((err) => {
+        if (err) {
+          console.log(err);
+        }
+        io.to(`match_${id}`).emit('start match')
+      })
     }
     // if player is not ready, emit match cancelled
     if (!isReady) {
