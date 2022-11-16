@@ -5,10 +5,8 @@ const Schema = mongoose.Schema;
 const MatchSchema = new Schema(
   {
     match_id: {type: String},
-    player1: {type: Object},
-    player2: {type: Object},
-    mode: {type: String},
-    moves: {type: Object},
+    word: {type: String},
+    players: {type: Array},
     date: {type: String},
   }
 )

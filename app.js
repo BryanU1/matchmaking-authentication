@@ -92,14 +92,15 @@ io.on('connection', function(socket) {
     const sockets = await io.to(`lobby_${id}`).fetchSockets();
     socket.data.user.isReady = isReady;
     
-    // if player is ready, check other player
     if (isReady) {
+      // Check other player's ready status
       for (const player of sockets) {
         if (!player.data.user.isReady) {
           return;
         }
-      }  
-      // move everyone to a live match room
+      }
+      
+      // Move everyone to a live match room
       io.in(`lobby_${id}`).socketsJoin(`match_${id}`);
       io.in(`match_${id}`).socketsLeave(`lobby_${id}`);
 
@@ -113,12 +114,15 @@ io.on('connection', function(socket) {
         }
       }
 
+      let players = [];
+      players.push(sockets[0].data.user);
+      players.push(sockets[1].data.user);
+
       // Add match document to mongodb
       const match = {
         match_id: id,
         word,
-        player1: sockets[0].data.user,
-        player2: sockets[1].data.user,
+        players,
         date: new Date()
       }
 
