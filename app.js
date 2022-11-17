@@ -109,7 +109,7 @@ io.on('connection', function(socket) {
       let word;
       let rightLength = false;
       while (!rightLength) {
-        word = randomWords();
+        word = randomWords().toUpperCase();
         if (word.length == 5) {
           rightLength = true;
         }
@@ -122,6 +122,7 @@ io.on('connection', function(socket) {
       const now = new Date();
       // Add match document to mongodb
       const match = new Match({
+        _id: id,
         match_id: id,
         word,
         players,
@@ -137,10 +138,22 @@ io.on('connection', function(socket) {
     }
     // if player is not ready, emit match cancelled
     if (!isReady) {
-      io.in(`lobby_${id}`).emit('cancel match');
+      io.to(`lobby_${id}`).emit('cancel match');
       io.socketsLeave(`lobby_${id}`);
     }
   })  
+
+  socket.on('stalemate', async (id) => {
+    socket.data.user.stalemate = true;
+    const sockets = await io.to(`match_${id}`).fetchSockets();
+    for (const player of sockets) {
+      if (!player.data.user.stalemate) {
+        return;
+      }
+    }
+
+    socket.emit('end match', 'draw');
+  })
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
