@@ -204,6 +204,7 @@ io.on('connection', function(socket) {
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
+    ee.removeAllListeners('trigger pairing');
   })
 
 })
