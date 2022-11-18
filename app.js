@@ -150,41 +150,45 @@ io.on('connection', function(socket) {
       const answer = result.word;
       const arr = [];
       if (input === answer) {
-        Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, async (err, result) => {
+        Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, async (err) => {
+          if (err) {
+            console.log(err);
+          }
           io.to(`match_${id}`).emit(
             'end match', 
             socket.data.user.username
           );
         })
-      }
-      outerloop: for (let i = 0; i < 5; i++) {
-        if (input.charAt(i) === answer.charAt(i)) {
-          arr.push({
-            letter: input.charAt(i),
-            color: 'green'
-          })
-          continue;
-        }
-        for (let j = 0; j < 5; j++) {
-          if (input.charAt(i) === answer.charAt(j)) {
+      } else {
+        outerloop: for (let i = 0; i < 5; i++) {
+          if (input.charAt(i) === answer.charAt(i)) {
             arr.push({
               letter: input.charAt(i),
-              color: 'yellow'
+              color: 'green'
             })
-            continue outerloop;
+            continue;
           }
+          for (let j = 0; j < 5; j++) {
+            if (input.charAt(i) === answer.charAt(j)) {
+              arr.push({
+                letter: input.charAt(i),
+                color: 'yellow'
+              })
+              continue outerloop;
+            }
+          }
+          arr.push({
+            letter: input.charAt(i),
+            color: 'gray'
+          })
         }
-        arr.push({
-          letter: input.charAt(i),
-          color: 'gray'
-        })
+        socket.emit('incorrect', arr);
       }
-      socket.emit('incorrect', arr);
     })
   })
 
   socket.on('stalemate', async (id) => {
-    console.log('player in stalemate');
+    console.log(`${socket.data.user.username} in stalemate`);
     socket.data.user.stalemate = true;
     const sockets = await io.to(`match_${id}`).fetchSockets();
     for (const player of sockets) {
@@ -193,7 +197,7 @@ io.on('connection', function(socket) {
       }
     }
     // Both players in stalemate
-    Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
+    Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err) => {
       if (err) {
         console.log(err);
       }
@@ -204,7 +208,6 @@ io.on('connection', function(socket) {
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
-    ee.removeAllListeners('trigger pairing');
   })
 
 })
