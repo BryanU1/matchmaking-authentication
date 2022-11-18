@@ -7,6 +7,7 @@ const MatchSchema = new Schema(
     match_id: {type: String},
     word: {type: String},
     players: {type: Array},
+    result: {type: String},
     date: {type: String},
   }
 )

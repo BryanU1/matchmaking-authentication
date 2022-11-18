@@ -122,7 +122,6 @@ io.on('connection', function(socket) {
       const now = new Date();
       // Add match document to mongodb
       const match = new Match({
-        _id: id,
         match_id: id,
         word,
         players,
@@ -143,7 +142,49 @@ io.on('connection', function(socket) {
     }
   })  
 
+  socket.on('check answer', (id, input) => {
+    Match.findOne({match_id: id}, (err, result) => {
+      if (err) {
+        console.log(err);
+      }
+      const answer = result.word;
+      const arr = [];
+      if (input === answer) {
+        Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, async (err, result) => {
+          io.to(`match_${id}`).emit(
+            'end match', 
+            socket.data.user.username
+          );
+        })
+      }
+      outerloop: for (let i = 0; i < 5; i++) {
+        if (input.charAt(i) === answer.charAt(i)) {
+          arr.push({
+            letter: input.charAt(i),
+            color: 'green'
+          })
+          continue;
+        }
+        for (let j = 0; j < 5; j++) {
+          if (input.charAt(i) === answer.charAt(j)) {
+            arr.push({
+              letter: input.charAt(i),
+              color: 'yellow'
+            })
+            continue outerloop;
+          }
+        }
+        arr.push({
+          letter: input.charAt(i),
+          color: 'gray'
+        })
+      }
+      socket.emit('incorrect', arr);
+    })
+  })
+
   socket.on('stalemate', async (id) => {
+    console.log('player in stalemate');
     socket.data.user.stalemate = true;
     const sockets = await io.to(`match_${id}`).fetchSockets();
     for (const player of sockets) {
@@ -151,8 +192,14 @@ io.on('connection', function(socket) {
         return;
       }
     }
+    // Both players in stalemate
+    Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
+      if (err) {
+        console.log(err);
+      }
+      io.to(`match_${id}`).emit('end match', 'draw');
+    })
 
-    socket.emit('end match', 'draw');
   })
 
   socket.on('disconnect', function() {
