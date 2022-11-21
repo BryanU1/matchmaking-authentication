@@ -74,7 +74,6 @@ io.on('connection', function(socket) {
   })
 
   ee.on('trigger pairing', callback);
-  console.log(ee.listenerCount('trigger pairing'));
 
   socket.on('leave queue', async () => {
     socket.leave('waiting room');

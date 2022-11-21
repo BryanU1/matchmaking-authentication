@@ -41,7 +41,7 @@ exports.user_login_post = (req, res, next) => {
         return next(err);
       }
       if (result) {
-        // passwords match! log user in
+        // if passwords match, log user in
         const user = {
           id: account._id,
           username: account.username,
