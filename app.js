@@ -62,6 +62,10 @@ io.on('connection', function(socket) {
         socket.join('waiting room');
         
         const sockets = await io.in('waiting room').fetchSockets();
+        console.log('In waiting room:')
+        for (const user of sockets) {
+          console.log(user.data.user.username);
+        }
         if (sockets.length == 2) {
           ee.emit('trigger pairing');
         }
@@ -69,24 +73,11 @@ io.on('connection', function(socket) {
     )
   })
 
+  ee.on('trigger pairing', callback);
+  console.log(ee.listenerCount('trigger pairing'));
+
   socket.on('leave queue', async () => {
     socket.leave('waiting room');
-  })
-
-  ee.on('trigger pairing', async () => {
-    const sockets = await io.in('waiting room').fetchSockets();
-    if (sockets.length >= 2 && sockets[0].id == socket.id) {
-      pairing(socket, sockets);
-
-      // Print remaining players in queue
-      const waiting = await io.in('waiting room').fetchSockets();
-      console.log('users in waiting room:');
-      for (const user of waiting) {
-        console.log(user.data.user.username);
-      }
-
-      ee.emit('trigger pairing');
-    }
   })
 
   socket.on('check player status', async (isReady, id) => {
@@ -132,7 +123,7 @@ io.on('connection', function(socket) {
         if (err) {
           console.log(err);
         }
-        io.to(`match_${id}`).emit('start match')
+        io.to(`match_${id}`).emit('start match');
       })
     }
     // if player is not ready, emit match cancelled
@@ -156,7 +147,10 @@ io.on('connection', function(socket) {
           }
           io.to(`match_${id}`).emit(
             'end match', 
-            socket.data.user.username
+            {
+              winner: socket.data.user.username,
+              word: answer
+            }
           );
         })
       } else {
@@ -197,19 +191,36 @@ io.on('connection', function(socket) {
       }
     }
     // Both players in stalemate
-    Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err) => {
+    Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
       if (err) {
         console.log(err);
       }
-      io.to(`match_${id}`).emit('end match', 'draw');
+      io.to(`match_${id}`).emit('end match', {
+        winner: 'none',
+        word: result.word
+      });
     })
 
   })
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
+    ee.removeListener('trigger pairing', callback);
   })
 
+  async function callback() {
+    const sockets = await io.in('waiting room').fetchSockets();
+    console.log('sockets length: ' + sockets.length + '(' + socket.id + ')');
+    if (sockets.length >= 2) {
+      console.log('first socket: ' + sockets[0].data.user.username);
+    }
+    if (sockets.length >= 2 && sockets[0].id == socket.id) {
+      console.log('Current socket doing the pairing: ' + socket.id);
+      pairing(socket, sockets);
+  
+      ee.emit('trigger pairing');
+    }
+  }
 })
 
 async function pairing(socket, socketsList) {
