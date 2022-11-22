@@ -60,6 +60,7 @@ io.on('connection', function(socket) {
         }
         socket.data.user = authData.user;
         socket.join('waiting room');
+        ee.on('trigger pairing', callback);
         
         const sockets = await io.in('waiting room').fetchSockets();
         console.log('In waiting room:')
@@ -73,10 +74,12 @@ io.on('connection', function(socket) {
     )
   })
 
-  ee.on('trigger pairing', callback);
-
   socket.on('leave queue', async () => {
     socket.leave('waiting room');
+  })
+
+  socket.on('turn off listener', () => {
+    ee.removeListener('trigger pairing', callback);
   })
 
   socket.on('check player status', async (isReady, id) => {
@@ -110,6 +113,7 @@ io.on('connection', function(socket) {
       players.push(sockets[1].data.user);
 
       const now = new Date();
+
       // Add match document to mongodb
       const match = new Match({
         match_id: id,
@@ -133,12 +137,14 @@ io.on('connection', function(socket) {
   })  
 
   socket.on('check answer', (id, input) => {
-    Match.findOne({match_id: id}, (err, result) => {
+    Match.findOne({match_id: id}, async (err, result) => {
       if (err) {
         console.log(err);
       }
       const answer = result.word;
       const arr = [];
+      const sockets = await io.to(`match_${id}`).fetchSockets();
+
       if (input === answer) {
         Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, async (err) => {
           if (err) {
@@ -204,40 +210,35 @@ io.on('connection', function(socket) {
 
   socket.on('disconnect', function() {
     console.log('A user disconnected');
-    ee.removeListener('trigger pairing', callback);
   })
 
   async function callback() {
     const sockets = await io.in('waiting room').fetchSockets();
-    console.log('sockets length: ' + sockets.length + '(' + socket.id + ')');
-    if (sockets.length >= 2) {
-      console.log('first socket: ' + sockets[0].data.user.username);
-    }
     if (sockets.length >= 2 && sockets[0].id == socket.id) {
-      console.log('Current socket doing the pairing: ' + socket.id);
       pairing(socket, sockets);
   
       ee.emit('trigger pairing');
     }
   }
+
+  async function pairing(socket, socketsList) {
+    const id = uniqid();
+    socket.leave('waiting room')
+    socketsList[1].leave('waiting room');
+  
+    socket.join(`lobby_${id}`);
+    socketsList[1].join(`lobby_${id}`);
+  
+    io.to(`lobby_${id}`).emit('match found', id);
+  
+    // Print players in newly formed lobby
+    const players = await io.in(`lobby_${id}`).fetchSockets();
+    console.log(`users in lobby_${id}:`)
+    for (const player of players) {
+      console.log(player.data.user.username);
+    }
+  }
 })
 
-async function pairing(socket, socketsList) {
-  const id = uniqid();
-  socket.leave('waiting room')
-  socketsList[1].leave('waiting room');
-
-  socket.join(`lobby_${id}`);
-  socketsList[1].join(`lobby_${id}`);
-
-  io.to(`lobby_${id}`).emit('match found', id);
-
-  // Print players in newly formed lobby
-  const players = await io.in(`lobby_${id}`).fetchSockets();
-  console.log(`users in lobby_${id}:`)
-  for (const player of players) {
-    console.log(player.data.user.username);
-  }
-}
 
 server.listen(5000, () => console.log("app listening on port 5000!"));
