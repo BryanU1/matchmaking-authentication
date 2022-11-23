@@ -48,6 +48,8 @@ app.use('/api', apiRouter);
 
 io.on('connection', function(socket) {
   console.log('user connected: ' + socket.id);
+  console.log('pairing listener count: ' + ee.listenerCount('trigger pairing'));
+  console.log('----------------');
 
   socket.on('join queue', (token) => {
     jwt.verify(
@@ -60,7 +62,7 @@ io.on('connection', function(socket) {
         }
         socket.data.user = authData.user;
         socket.join('waiting room');
-        ee.on('trigger pairing', callback);
+        ee.on('trigger pairing', matchSockets);
         
         const sockets = await io.in('waiting room').fetchSockets();
         console.log('In waiting room:')
@@ -78,8 +80,17 @@ io.on('connection', function(socket) {
     socket.leave('waiting room');
   })
 
-  socket.on('turn off listener', () => {
-    ee.removeListener('trigger pairing', callback);
+  socket.on('turn off pairing listener', () => {
+    ee.removeListener('trigger pairing', matchSockets);
+  })
+
+  socket.on('turn off player disconnected listener', () => {
+    ee.removeListener('player disconnected', handleDisconnect);
+  })
+
+  socket.on('turn on player disconnected listener', () => {
+    ee.on('player disconnected', handleDisconnect);
+    console.log('Disconnect listener: ' + ee.listenerCount('player disconnected'));
   })
 
   socket.on('check player status', async (isReady, id) => {
@@ -137,13 +148,12 @@ io.on('connection', function(socket) {
   })  
 
   socket.on('check answer', (id, input) => {
-    Match.findOne({match_id: id}, async (err, result) => {
+    Match.findOne({match_id: id}, (err, result) => {
       if (err) {
         console.log(err);
       }
       const answer = result.word;
       const arr = [];
-      const sockets = await io.to(`match_${id}`).fetchSockets();
 
       if (input === answer) {
         Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, async (err) => {
@@ -205,14 +215,38 @@ io.on('connection', function(socket) {
         word: result.word
       });
     })
-
   })
 
   socket.on('disconnect', function() {
+    ee.emit('player disconnected');
+    ee.removeListener('player disconnected', handleDisconnect);
+    console.log('Disconnect listener count: ' + ee.listenerCount('player disconnected'));
     console.log('A user disconnected');
+    console.log('----------------');
+    ee.removeListener('trigger pairing', matchSockets);
   })
 
-  async function callback() {
+  async function handleDisconnect() {
+    const id = socket.data.roomID;
+    const sockets = await io.to(`match_${id}`).fetchSockets();
+    for (const player of sockets) {
+      // if other player is in stalemate, end match
+      if (player.data.user.stalemate) {
+        Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
+          if (err) {
+            console.log(err);
+          }
+          io.to(`match_${id}`).emit('end match', {
+            winner: 'none',
+            word: result.word
+          });
+        })
+      }
+    }
+    io.to(`match_${id}`).emit('player disconnected');
+  }
+
+  async function matchSockets() {
     const sockets = await io.in('waiting room').fetchSockets();
     if (sockets.length >= 2 && sockets[0].id == socket.id) {
       pairing(socket, sockets);
@@ -231,11 +265,12 @@ io.on('connection', function(socket) {
   
     io.to(`lobby_${id}`).emit('match found', id);
   
-    // Print players in newly formed lobby
+    // Add id to data property in each socket
     const players = await io.in(`lobby_${id}`).fetchSockets();
     console.log(`users in lobby_${id}:`)
     for (const player of players) {
       console.log(player.data.user.username);
+      player.data.roomID = id;
     }
   }
 })
