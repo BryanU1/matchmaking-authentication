@@ -50,6 +50,21 @@ io.on('connection', function(socket) {
   console.log('user connected: ' + socket.id);
   console.log('pairing listener count: ' + ee.listenerCount('trigger pairing'));
   console.log('----------------');
+  
+  socket.on('turn off pairing listener', () => {
+    ee.removeListener('trigger pairing', matchSockets);
+    console.log('Pairing listener: ' + ee.listenerCount('trigger pairing'));
+  })
+
+  socket.on('turn off player disconnected listener', () => {
+    ee.removeListener('player disconnected', handleDisconnect);
+    console.log('Disconnect listener: ' + ee.listenerCount('player disconnected'));
+  })
+
+  socket.on('turn on player disconnected listener', () => {
+    ee.on('player disconnected', handleDisconnect);
+    console.log('Disconnect listener: ' + ee.listenerCount('player disconnected'));
+  })
 
   socket.on('join queue', (token) => {
     jwt.verify(
@@ -73,25 +88,13 @@ io.on('connection', function(socket) {
           ee.emit('trigger pairing');
         }
       }
-    )
-  })
-
-  socket.on('leave queue', async () => {
-    socket.leave('waiting room');
-  })
-
-  socket.on('turn off pairing listener', () => {
-    ee.removeListener('trigger pairing', matchSockets);
-  })
-
-  socket.on('turn off player disconnected listener', () => {
-    ee.removeListener('player disconnected', handleDisconnect);
-  })
-
-  socket.on('turn on player disconnected listener', () => {
-    ee.on('player disconnected', handleDisconnect);
-    console.log('Disconnect listener: ' + ee.listenerCount('player disconnected'));
-  })
+      )
+    })
+    
+    socket.on('leave queue', async () => {
+      socket.leave('waiting room');
+    })
+  
 
   socket.on('check player status', async (isReady, id) => {
     const sockets = await io.to(`lobby_${id}`).fetchSockets();
@@ -167,6 +170,7 @@ io.on('connection', function(socket) {
               word: answer
             }
           );
+          io.socketsLeave(`match_${id}`);
         })
       } else {
         outerloop: for (let i = 0; i < 5; i++) {
@@ -191,7 +195,11 @@ io.on('connection', function(socket) {
             color: 'gray'
           })
         }
-        socket.emit('incorrect', arr);
+        io.to(`match_${id}`).emit('incorrect', {
+          arr, 
+          user: socket.data.user.username 
+        });
+        // send arr to both sockets
       }
     })
   })
@@ -214,6 +222,7 @@ io.on('connection', function(socket) {
         winner: 'none',
         word: result.word
       });
+      io.socketsLeave(`match_${id}`);
     })
   })
 
@@ -240,6 +249,7 @@ io.on('connection', function(socket) {
             winner: 'none',
             word: result.word
           });
+          io.socketsLeave(`match_${id}`);
         })
       }
     }
