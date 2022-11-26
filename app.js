@@ -101,6 +101,7 @@ io.on('connection', function(socket) {
     socket.data.user.isReady = isReady;
     
     if (isReady) {
+      socket.emit('player status received');
       // Check other player's ready status
       for (const player of sockets) {
         if (!player.data.user.isReady) {
@@ -146,6 +147,7 @@ io.on('connection', function(socket) {
     // if player is not ready, emit match cancelled
     if (!isReady) {
       io.to(`lobby_${id}`).emit('cancel match');
+      io.to(`lobby_${id}`).emit('player status received');
       io.socketsLeave(`lobby_${id}`);
     }
   })  
