@@ -88,13 +88,12 @@ io.on('connection', function(socket) {
           ee.emit('trigger pairing');
         }
       }
-      )
-    })
+    )
+  })
     
-    socket.on('leave queue', async () => {
-      socket.leave('waiting room');
-    })
-  
+  socket.on('leave queue', async () => {
+    socket.leave('waiting room');
+  })
 
   socket.on('check player status', async (isReady, id) => {
     const sockets = await io.to(`lobby_${id}`).fetchSockets();
