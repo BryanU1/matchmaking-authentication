@@ -27,6 +27,7 @@ const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
 
 const Match = require('./models/match');
+const { propfind } = require('./routes/index');
 
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
@@ -48,12 +49,19 @@ app.use('/api', apiRouter);
 
 io.on('connection', function(socket) {
   console.log('user connected: ' + socket.id);
-  console.log('pairing listener count: ' + ee.listenerCount('trigger pairing'));
+  console.log('normal pairing listener count: ' + ee.listenerCount('trigger pairing: normal'));
+  console.log('ranked pairing listener count: ' + ee.listenerCount('trigger pairing: ranked'));
   console.log('----------------');
   
-  socket.on('turn off pairing listener', () => {
-    ee.removeListener('trigger pairing', matchSockets);
-    console.log('Pairing listener: ' + ee.listenerCount('trigger pairing'));
+  socket.on('turn off pairing listener', (mode) => {
+    if (mode === 'normal') {
+      ee.removeListener('trigger pairing: normal', normMatch);
+      console.log('normal pairing listener: ' + ee.listenerCount('trigger pairing: normal'));
+    }
+    if (mode === 'ranked') {
+      ee.removeListener('trigger pairing: ranked', rankedMatch);
+      console.log('ranked pairing listener: ' + ee.listenerCount('trigger pairing: ranked'));
+    }
   })
 
   socket.on('turn off player disconnected listener', () => {
@@ -66,7 +74,7 @@ io.on('connection', function(socket) {
     console.log('Disconnect listener: ' + ee.listenerCount('player disconnected'));
   })
 
-  socket.on('join queue', (token) => {
+  socket.on('join queue', (token, mode) => {
     jwt.verify(
       token,
       process.env.SECRET_KEY,
@@ -76,26 +84,48 @@ io.on('connection', function(socket) {
           return;
         }
         socket.data.user = authData.user;
-        socket.join('waiting room');
-        ee.on('trigger pairing', matchSockets);
-        
-        const sockets = await io.in('waiting room').fetchSockets();
-        console.log('In waiting room:')
-        for (const user of sockets) {
-          console.log(user.data.user.username);
+        if (mode === 'normal') {
+          socket.join('waiting room: normal');
+          ee.on('trigger pairing: normal', normMatch);
+          
+          const sockets = await io.in('waiting room: normal').fetchSockets();
+          console.log('in waiting room (normal):')
+          for (const user of sockets) {
+            console.log(user.data.user.username);
+          }
+          if (sockets.length === 2) {
+            ee.emit('trigger pairing: normal');
+          }
         }
-        if (sockets.length == 2) {
-          ee.emit('trigger pairing');
+        if (mode === 'ranked') {
+          socket.join('waiting room: ranked');
+          ee.on('trigger pairing: ranked', rankedMatch);
+          console.log('trigger pairing count (ranked): ' + ee.listenerCount('trigger pairing: ranked'))
+
+          const sockets = await io.in('waiting room: ranked').fetchSockets();
+          console.log('in waiting room (ranked): ')
+          for (const user of sockets) {
+            console.log(user.data.user.username);
+          }
+          
+          if (sockets.length === 2) {
+            ee.emit('trigger pairing: ranked');
+          }
         }
       }
     )
   })
     
-  socket.on('leave queue', async () => {
-    socket.leave('waiting room');
+  socket.on('leave queue', (mode) => {
+    if (mode === 'normal') {
+      socket.leave('waiting room: normal');
+    }
+    if (mode === 'ranked') {
+      socket.leave('waiting room: ranked');
+    }
   })
 
-  socket.on('check player status', async (isReady, id) => {
+  socket.on('check player status', async (isReady, id, mode) => {
     const sockets = await io.to(`lobby_${id}`).fetchSockets();
     socket.data.user.isReady = isReady;
     
@@ -131,6 +161,7 @@ io.on('connection', function(socket) {
       // Add match document to mongodb
       const match = new Match({
         match_id: id,
+        mode,
         word,
         players,
         date: dateFormat(now, 'mm/dd/yy')
@@ -233,7 +264,8 @@ io.on('connection', function(socket) {
     console.log('Disconnect listener count: ' + ee.listenerCount('player disconnected'));
     console.log('A user disconnected');
     console.log('----------------');
-    ee.removeListener('trigger pairing', matchSockets);
+    ee.removeListener('trigger pairing: normal', normMatch);
+    ee.removeListener('trigger pairing: ranked', rankedMatch);
   })
 
   async function handleDisconnect() {
@@ -257,19 +289,19 @@ io.on('connection', function(socket) {
     io.to(`match_${id}`).emit('player disconnected');
   }
 
-  async function matchSockets() {
-    const sockets = await io.in('waiting room').fetchSockets();
+  async function normMatch() {
+    const sockets = await io.in('waiting room: normal').fetchSockets();
     if (sockets.length >= 2 && sockets[0].id == socket.id) {
-      pairing(socket, sockets);
+      normPairing(sockets);
   
-      ee.emit('trigger pairing');
+      ee.emit('trigger pairing: normal');
     }
   }
 
-  async function pairing(socket, socketsList) {
+  async function normPairing(socketsList) {
     const id = uniqid();
-    socket.leave('waiting room')
-    socketsList[1].leave('waiting room');
+    socket.leave('waiting room: normal')
+    socketsList[1].leave('waiting room: normal');
   
     socket.join(`lobby_${id}`);
     socketsList[1].join(`lobby_${id}`);
@@ -282,6 +314,50 @@ io.on('connection', function(socket) {
     for (const player of players) {
       console.log(player.data.user.username);
       player.data.roomID = id;
+    }
+  }
+
+  async function rankedMatch() {
+    const sockets = await io.in('waiting room: ranked').fetchSockets();
+    if (sockets.length >= 2 && sockets[0].id == socket.id) {
+      rankedPairing(sockets);
+      ee.emit('trigger pairing: ranked');
+    }
+  }
+
+  async function rankedPairing(socketsList) {
+    const id = uniqid();
+    let min;
+    for (let i = 1; i < socketsList.length; i++) {
+      const current = socketsList[i];
+      if (i === 1) {
+        min = current;
+        continue;
+      }
+      const curRating = current.data.user.rating;
+      const socketRating = socket.data.user.rating;
+      const minRating = min.data.user.rating;
+      
+      const minDiff = Math.abs(minRating, socketRating);
+      const currentDiff = Math.abs(curRating, socketRating);
+
+      if (currentDiff < minDiff) {
+        min = current;
+      } 
+    }
+    socket.join(`lobby_${id}`);
+    min.join(`lobby_${id}`);
+
+    io.in(`lobby_${id}`).socketsLeave('waiting room: ranked');
+
+    io.to(`lobby_${id}`).emit('match found', id);
+
+    // Add id to data property in each socket in this lobby
+    const sockets = await io.in(`lobby_${id}`).fetchSockets();
+    console.log(`users in ranked lobby_${id}:`)
+    for (const user of sockets) {
+      console.log(`${user.data.user.username} (${user.data.user.rating})`);
+      user.data.roomID = id;
     }
   }
 })
