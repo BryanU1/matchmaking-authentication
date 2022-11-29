@@ -1,29 +1,58 @@
 const User = require('../models/user');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { body, validationResult } = require('express-validator'); 
 
 exports.user_create_get = (req, res) => {
   res.render('sign-up-form');
 }
 
-exports.user_create_post = (req, res, next) => {
-  bcrypt.hash(req.body.password, 10, (err, hashedPassword) => {
-    if (err) {
-      return next(err);
+exports.user_create_post = [
+  body('username')
+    .trim()
+    .isLength({min: 1})
+    .withMessage('Username is empty')
+    .isAlphanumeric()
+    .withMessage('Username must contain alphabets or numbers')
+    .isLength({min: 8})
+    .withMessage('Username must be 8 characters or more'),
+  body('password')
+    .trim()
+    .isLength({min: 1})
+    .withMessage('Password is empty')
+    .isAlphanumeric()
+    .withMessage('Password must contain alphabets or numbers')
+    .isLength({min: 8})
+    .withMessage('Password must be 8 characters or more'),
+  
+  (req, res, next) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      res.json({
+        errors: errors.array()
+      })
+      return;
     }
-    const user = new User({
-      username: req.body.username,
-      password: hashedPassword,
-      displayName: req.body.username,
-      rating: 800
-    }).save(err => {
+    bcrypt.hash(req.body.password, 10, (err, hashedPassword) => {
       if (err) {
         return next(err);
       }
-      res.status(200).redirect('http://localhost:3000');
-    });
-  })
-}
+      const user = new User({
+        username: req.body.username,
+        password: hashedPassword,
+        displayName: req.body.username,
+        rating: 800
+      }).save(err => {
+        if (err) {
+          console.log(err);
+          return;
+        }
+        res.json({errors: []})
+      });
+    })
+  }
+]
 
 exports.user_login_get = function(req, res, next) {
   res.render('index', {user: req.user});
