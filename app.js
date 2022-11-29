@@ -22,12 +22,13 @@ const ee = new EventEmitter();
 const uniqid = require('uniqid');
 const randomWords = require('random-words');
 const dateFormat = require('dateformat');
+const async = require('async');
 
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
 
 const Match = require('./models/match');
-const { propfind } = require('./routes/index');
+const User = require('./models/user');
 
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
@@ -78,40 +79,45 @@ io.on('connection', function(socket) {
     jwt.verify(
       token,
       process.env.SECRET_KEY,
-      async (err, authData) => {
+      (err, authData) => {
         if (err) {
           console.log(err);
           return;
         }
-        socket.data.user = authData.user;
-        if (mode === 'normal') {
-          socket.join('waiting room: normal');
-          ee.on('trigger pairing: normal', normMatch);
-          
-          const sockets = await io.in('waiting room: normal').fetchSockets();
-          console.log('in waiting room (normal):')
-          for (const user of sockets) {
-            console.log(user.data.user.username);
+        User.findOne({_id: authData.user.id}, async (err, user) => {
+          if (err) {
+            console.log(err);
           }
-          if (sockets.length === 2) {
-            ee.emit('trigger pairing: normal');
+          socket.data.user = user;
+          if (mode === 'normal') {
+            socket.join('waiting room: normal');
+            ee.on('trigger pairing: normal', normMatch);
+            
+            const sockets = await io.in('waiting room: normal').fetchSockets();
+            console.log('in waiting room (normal):')
+            for (const user of sockets) {
+              console.log(user.data.user.username);
+            }
+            if (sockets.length === 2) {
+              ee.emit('trigger pairing: normal');
+            }
           }
-        }
-        if (mode === 'ranked') {
-          socket.join('waiting room: ranked');
-          ee.on('trigger pairing: ranked', rankedMatch);
-          console.log('trigger pairing count (ranked): ' + ee.listenerCount('trigger pairing: ranked'))
-
-          const sockets = await io.in('waiting room: ranked').fetchSockets();
-          console.log('in waiting room (ranked): ')
-          for (const user of sockets) {
-            console.log(user.data.user.username);
+          if (mode === 'ranked') {
+            socket.join('waiting room: ranked');
+            ee.on('trigger pairing: ranked', rankedMatch);
+            console.log('trigger pairing count (ranked): ' + ee.listenerCount('trigger pairing: ranked'))
+  
+            const sockets = await io.in('waiting room: ranked').fetchSockets();
+            console.log('in waiting room (ranked): ')
+            for (const user of sockets) {
+              console.log(user.data.user.username);
+            }
+            
+            if (sockets.length === 2) {
+              ee.emit('trigger pairing: ranked');
+            }
           }
-          
-          if (sockets.length === 2) {
-            ee.emit('trigger pairing: ranked');
-          }
-        }
+        })
       }
     )
   })
@@ -183,7 +189,7 @@ io.on('connection', function(socket) {
   })  
 
   socket.on('check answer', (id, input) => {
-    Match.findOne({match_id: id}, (err, result) => {
+    Match.findOne({match_id: id}, async (err, result) => {
       if (err) {
         console.log(err);
       }
@@ -191,19 +197,88 @@ io.on('connection', function(socket) {
       const arr = [];
 
       if (input === answer) {
-        Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, async (err) => {
-          if (err) {
-            console.log(err);
-          }
-          io.to(`match_${id}`).emit(
-            'end match', 
-            {
-              winner: socket.data.user.username,
-              word: answer
+        if (result.mode === 'ranked') {
+          // Get the socket list
+          let opponent;
+          let oppRating;
+          let thisRating = socket.data.user.rating;
+          const sockets = await io.to(`match_${id}`).fetchSockets();
+          for (const player of sockets) {
+            if (player.id !== socket.id) {
+              opponent = player.data.user;
+              oppRating = player.data.user.rating;
+              thisRating += Math.round(15 * oppRating / thisRating);
+              oppRating -= Math.round(15 * oppRating / thisRating);
+              if (oppRating < 100) {
+                oppRating = 100;
+              }
             }
-          );
-          io.socketsLeave(`match_${id}`);
-        })
+          }
+          async.parallel(
+            {
+              match(callback) {
+                Match.findOneAndUpdate(
+                  {
+                    match_id: id
+                  }, 
+                  {
+                    $set: {result: socket.data.user.username}
+                  }
+                ).exec(callback);
+              },
+              user1(callback) {
+                User.findOneAndUpdate(
+                  {
+                    _id: socket.data.user.id 
+                  },
+                  {
+                    $set: {rating: thisRating}
+                  }
+                ).exec(callback);
+              },
+              user2(callback) {
+                User.findOneAndUpdate(
+                  {
+                    _id: opponent.id
+                  },
+                  {
+                    $set: {rating: oppRating}
+                  }
+                ).exec(callback);
+              }
+            },
+            (err, result) => {
+              if (err) {
+                console.log(err);
+              }
+              io.to(`match_${id}`).emit(
+                'end match',
+                {
+                  winner: socket.data.user.username,
+                  mode: result.match.mode,
+                  word: answer,
+                  ratings: [{username: socket.data.user.username, rating: thisRating}, {username: opponent.username, rating: oppRating}]
+                }
+              )
+              io.socketsLeave(`match_${id}`);
+            }
+          )
+        }
+        if (result.mode === 'normal') {
+          Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, (err) => {
+            if (err) {
+              console.log(err);
+            }
+            io.to(`match_${id}`).emit(
+              'end match', 
+              {
+                winner: socket.data.user.username,
+                word: answer,
+              }
+            );
+            io.socketsLeave(`match_${id}`);
+          })
+        }
       } else {
         outerloop: for (let i = 0; i < 5; i++) {
           if (input.charAt(i) === answer.charAt(i)) {
@@ -231,7 +306,6 @@ io.on('connection', function(socket) {
           arr, 
           user: socket.data.user.username 
         });
-        // send arr to both sockets
       }
     })
   })
@@ -245,6 +319,7 @@ io.on('connection', function(socket) {
         return;
       }
     }
+
     // Both players in stalemate
     Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
       if (err) {
