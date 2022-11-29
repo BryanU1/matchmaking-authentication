@@ -2,6 +2,7 @@ const User = require('../models/user');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator'); 
+const { promiseImpl } = require('ejs');
 
 exports.user_create_get = (req, res) => {
   res.render('sign-up-form');
@@ -15,7 +16,15 @@ exports.user_create_post = [
     .isAlphanumeric()
     .withMessage('Username must contain alphabets or numbers')
     .isLength({min: 8})
-    .withMessage('Username must be 8 characters or more'),
+    .withMessage('Username must be 8 characters or more')
+    .custom(value => {
+      User.findOne({username: value}, user => {
+        if (user) {
+          return Promise.reject()
+        }
+      })
+    })
+    .withMessage('Username already in use'),
   body('password')
     .trim()
     .isLength({min: 1})
@@ -34,6 +43,7 @@ exports.user_create_post = [
       })
       return;
     }
+
     bcrypt.hash(req.body.password, 10, (err, hashedPassword) => {
       if (err) {
         return next(err);
