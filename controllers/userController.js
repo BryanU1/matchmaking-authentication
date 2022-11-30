@@ -2,7 +2,6 @@ const User = require('../models/user');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator'); 
-const { promiseImpl } = require('ejs');
 
 exports.user_create_get = (req, res) => {
   res.render('sign-up-form');
