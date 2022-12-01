@@ -17,4 +17,8 @@ user_controller.user_create_get);
 router.post('/sign-up',
 user_controller.user_create_post);
 
+router.post('/user/:id/update',
+user_controller.verifyToken,
+user_controller.user_update_post);
+
 module.exports = router;
