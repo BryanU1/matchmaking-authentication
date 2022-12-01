@@ -65,7 +65,11 @@ exports.user_create_post = [
         username: req.body.username,
         password: hashedPassword,
         displayName: req.body.username,
-        rating: 800
+        rating: 800,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        games: 0
       }).save(err => {
         if (err) {
           console.log(err);

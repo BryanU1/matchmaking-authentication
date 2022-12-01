@@ -232,7 +232,8 @@ io.on('connection', function(socket) {
                     id: socket.data.user.id 
                   },
                   {
-                    $set: {rating: thisRating}
+                    $set: {rating: thisRating},
+                    $inc: {wins: 1, games: 1}
                   }
                 ).exec(callback);
               },
@@ -242,7 +243,8 @@ io.on('connection', function(socket) {
                     id: opponent.id
                   },
                   {
-                    $set: {rating: oppRating}
+                    $set: {rating: oppRating},
+                    $inc: {losses: 1, games: 1}
                   }
                 ).exec(callback);
               }
@@ -311,26 +313,64 @@ io.on('connection', function(socket) {
   })
 
   socket.on('stalemate', async (id) => {
-    console.log(`${socket.data.user.username} in stalemate`);
     socket.data.user.stalemate = true;
+    let opponent;
     const sockets = await io.to(`match_${id}`).fetchSockets();
     for (const player of sockets) {
+      if (player.id !== socket.id) {
+        opponent = player.data.user;
+      }
       if (!player.data.user.stalemate) {
         return;
       }
     }
 
-    // Both players in stalemate
-    Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
-      if (err) {
-        console.log(err);
+    async.parallel(
+      {
+        match(callback) {
+          Match.findOneAndUpdate(
+            {
+              match_id: id
+            }, 
+            {
+              $set: {result: 'draw'}
+            }
+          ).exec(callback);
+        },
+
+        user1(callback) {
+          User.findOneAndUpdate(
+            {
+              id: socket.data.user.id
+            },
+            {
+              $inc: {draws: 1, games: 1}
+            }
+          ).exec(callback);
+        },
+
+        user2(callback) {
+          User.findOneAndUpdate(
+            {
+              id: opponent.id
+            },
+            {
+              $inc: {draws: 1, games: 1}
+            }
+          ).exec(callback);
+        }
+      },
+      (err, result) => {
+        if (err) {
+          console.log(err);
+        }
+        io.to(`match_${id}`).emit('end match', {
+          winner: 'none',
+          word: result.match.word
+        });
+        io.socketsLeave(`match_${id}`);
       }
-      io.to(`match_${id}`).emit('end match', {
-        winner: 'none',
-        word: result.word
-      });
-      io.socketsLeave(`match_${id}`);
-    })
+    )
   })
 
   socket.on('disconnect', function() {

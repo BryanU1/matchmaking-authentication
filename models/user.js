@@ -10,7 +10,7 @@ const UserSchema = new Schema(
     displayName: {type: String},
     rating: {type: Number},
     wins: {type: Number},
-    losses: {typs: Number},
+    losses: {type: Number},
     draws: {type: Number},
     games: {type: Number}
   }
