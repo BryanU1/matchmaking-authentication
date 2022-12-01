@@ -8,7 +8,11 @@ const UserSchema = new Schema(
     username: {type: String, required: true},
     password: {type: String, required: true},
     displayName: {type: String},
-    rating: {type: Number}
+    rating: {type: Number},
+    wins: {type: Number},
+    losses: {typs: Number},
+    draws: {type: Number},
+    games: {type: Number}
   }
 );
 

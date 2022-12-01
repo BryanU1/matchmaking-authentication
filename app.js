@@ -84,7 +84,7 @@ io.on('connection', function(socket) {
           console.log(err);
           return;
         }
-        User.findOne({_id: authData.user.id}, async (err, user) => {
+        User.findOne({id: authData.user.id}, async (err, user) => {
           if (err) {
             console.log(err);
           }
@@ -229,7 +229,7 @@ io.on('connection', function(socket) {
               user1(callback) {
                 User.findOneAndUpdate(
                   {
-                    _id: socket.data.user.id 
+                    id: socket.data.user.id 
                   },
                   {
                     $set: {rating: thisRating}
@@ -239,7 +239,7 @@ io.on('connection', function(socket) {
               user2(callback) {
                 User.findOneAndUpdate(
                   {
-                    _id: opponent.id
+                    id: opponent.id
                   },
                   {
                     $set: {rating: oppRating}
