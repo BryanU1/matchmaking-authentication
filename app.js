@@ -259,7 +259,16 @@ io.on('connection', function(socket) {
                   winner: socket.data.user.username,
                   mode: result.match.mode,
                   word: answer,
-                  ratings: [{username: socket.data.user.username, rating: thisRating}, {username: opponent.username, rating: oppRating}]
+                  ratings: [
+                    {
+                      username: socket.data.user.username,
+                      rating: thisRating
+                    }, 
+                    {
+                      username: opponent.username, 
+                      rating: oppRating
+                    }
+                  ]
                 }
               )
               io.socketsLeave(`match_${id}`);
@@ -386,22 +395,93 @@ io.on('connection', function(socket) {
   async function handleDisconnect() {
     const id = socket.data.roomID;
     const sockets = await io.to(`match_${id}`).fetchSockets();
-    for (const player of sockets) {
-      // if other player is in stalemate, end match
-      if (player.data.user.stalemate) {
-        Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
-          if (err) {
-            console.log(err);
+    if (socket.id !== sockets[0].id){
+      Match.findOne({match_id: id}, (err, match) => {
+        if (err) {
+          console.log(err);
+        }
+        if (match.mode === 'ranked') {
+          const opponent = sockets[0].data.user;
+          thisRating = socket.data.user.rating;
+          oppRating = opponent.rating;
+
+          thisRating -= 30;
+          oppRating += 15;
+
+          async.parallel(
+            {
+              // User that is still connected
+              user1(callback) {
+                User.findOneAndUpdate(
+                  {
+                    id: opponent.id
+                  },
+                  {
+                    $set: {rating: oppRating},
+                    $inc: {wins: 1, games: 1}
+                  }
+                ).exec(callback);
+              },
+              // User that disconnected
+              user2(callback) {
+                User.findOneAndUpdate(
+                  {
+                    id: socket.data.user.id
+                  },
+                  {
+                    $set: {rating: thisRating},
+                    $inc: {losses: 1, games: 1}
+                  }
+                ).exec(callback);
+              }
+            },
+            (err, result) => {
+              if (err) {
+                console.log(err);
+              }
+              io.to(`match_${id}`).emit(
+                'end match',
+                {
+                  winner: result.user1.username,
+                  mode: match.mode,
+                  word: match.word,
+                  ratings: [
+                    {
+                      username: result.user2.username,
+                      rating: thisRating
+                    }, 
+                    {
+                      username: result.user1.username, 
+                      rating: oppRating
+                    }
+                  ],
+                  message: `${result.user2.username} has disconnected`
+                }
+              )
+              io.socketsLeave(`match_${id}`);
+            }
+          )
+        }
+        if (match.mode === 'normal') {
+          for (const player of sockets) {
+            // if other player is in stalemate, end match
+            if (player.data.user.stalemate) {
+              Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
+                if (err) {
+                  console.log(err);
+                }
+                io.to(`match_${id}`).emit('end match', {
+                  winner: 'none',
+                  word: result.word
+                });
+                io.socketsLeave(`match_${id}`);
+              })
+            }
           }
-          io.to(`match_${id}`).emit('end match', {
-            winner: 'none',
-            word: result.word
-          });
-          io.socketsLeave(`match_${id}`);
-        })
-      }
+          io.to(`match_${id}`).emit('player disconnected');
+        }
+      })
     }
-    io.to(`match_${id}`).emit('player disconnected');
   }
 
   async function normMatch() {
