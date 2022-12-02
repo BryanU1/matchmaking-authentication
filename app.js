@@ -423,6 +423,16 @@ io.on('connection', function(socket) {
 
           async.parallel(
             {
+              match(callback) {
+                Match.findOneAndUpdate(
+                  {
+                    match_id: id
+                  },
+                  {
+                    $set: {result: opponent.username}
+                  }
+                ).exec(callback);
+              },
               // User that is still connected
               user1(callback) {
                 User.findOneAndUpdate(
