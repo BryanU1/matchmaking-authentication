@@ -6,4 +6,7 @@ router.get('/profile',
 user_controller.verifyToken,
 user_controller.profile_get);
 
+router.get('/leaderboard',
+user_controller.leaderboard_get);
+
 module.exports = router;

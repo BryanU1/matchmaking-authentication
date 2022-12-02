@@ -455,7 +455,7 @@ io.on('connection', function(socket) {
                       rating: oppRating
                     }
                   ],
-                  message: `${result.user2.username} has disconnected`
+                  message: `${result.user2.displayName} has disconnected`
                 }
               )
               io.socketsLeave(`match_${id}`);

@@ -202,6 +202,18 @@ exports.verifyToken = (req, res, next) => {
 
 // API Routes
 
+exports.leaderboard_get = (req, res) => {
+  User.find({}, 'displayName rating')
+    .sort({'rating': -1})
+    .limit(100)
+    .exec((err, users) => {
+      if (err) {
+        console.log(err);
+      }
+      res.json(users);
+    })
+}
+
 exports.profile_get = (req, res) => {
   jwt.verify(
     req.token, 
