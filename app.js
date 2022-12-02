@@ -177,7 +177,20 @@ io.on('connection', function(socket) {
         if (err) {
           console.log(err);
         }
-        io.to(`match_${id}`).emit('start match');
+        io.to(`match_${id}`).emit('start match',
+          [
+            {
+              id: players[0].id,
+              displayName: players[0].displayName,
+              rating: players[0].rating
+            },
+            {
+              id: players[1].id,
+              displayName: players[1].displayName,
+              rating: players[1].rating
+            }
+          ]          
+        );
       })
     }
     // if player is not ready, emit match cancelled
