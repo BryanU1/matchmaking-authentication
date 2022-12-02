@@ -408,7 +408,8 @@ io.on('connection', function(socket) {
   async function handleDisconnect() {
     const id = socket.data.roomID;
     const sockets = await io.to(`match_${id}`).fetchSockets();
-    if (socket.id !== sockets[0].id){
+    console.log(sockets.length);
+    if (sockets.length > 0 && socket.id !== sockets[0].id){
       Match.findOne({match_id: id}, (err, match) => {
         if (err) {
           console.log(err);
