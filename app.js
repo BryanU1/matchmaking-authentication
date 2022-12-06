@@ -24,12 +24,15 @@ const randomWords = require('random-words');
 const dateFormat = require('dateformat');
 const async = require('async');
 
+// Routes
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
 
+// Models
 const Match = require('./models/match');
 const User = require('./models/user');
 
+// Set up mongoDB.
 const mongoDb = `mongodb+srv://admin001:${process.env.PASSWORD}@cluster0.zpbe5jy.mongodb.net/?retryWrites=true&w=majority`;
 mongoose.connect(mongoDb, { useNewUrlParser: true, useUnifiedTopology: true});
 const db = mongoose.connection;
@@ -75,7 +78,9 @@ io.on('connection', function(socket) {
     console.log('Disconnect listener: ' + ee.listenerCount('player disconnected'));
   })
 
+  // Handle join queue event.
   socket.on('join queue', (token, mode) => {
+    // Protect event from unauthorized users
     jwt.verify(
       token,
       process.env.SECRET_KEY,
@@ -84,11 +89,14 @@ io.on('connection', function(socket) {
           console.log(err);
           return;
         }
+        // Store User data in a socket.
         User.findOne({id: authData.user.id}, async (err, user) => {
           if (err) {
             console.log(err);
           }
           socket.data.user = user;
+
+          // Handle normal queue.
           if (mode === 'normal') {
             socket.join('waiting room: normal');
             ee.on('trigger pairing: normal', normMatch);
@@ -98,10 +106,13 @@ io.on('connection', function(socket) {
             for (const user of sockets) {
               console.log(user.data.user.username);
             }
-            if (sockets.length === 2) {
+            // Waiting room has enough sockets to start pairing.
+            if (sockets.length >= 2) {
               ee.emit('trigger pairing: normal');
             }
           }
+
+          // Handle ranked queue.
           if (mode === 'ranked') {
             socket.join('waiting room: ranked');
             ee.on('trigger pairing: ranked', rankedMatch);
@@ -112,7 +123,7 @@ io.on('connection', function(socket) {
             for (const user of sockets) {
               console.log(user.data.user.username);
             }
-            
+            // Waiting room has enough sockets to start pairing.
             if (sockets.length === 2) {
               ee.emit('trigger pairing: ranked');
             }
@@ -121,7 +132,8 @@ io.on('connection', function(socket) {
       }
     )
   })
-    
+  
+  // Move socket out of waiting room.
   socket.on('leave queue', (mode) => {
     if (mode === 'normal') {
       socket.leave('waiting room: normal');
@@ -131,24 +143,29 @@ io.on('connection', function(socket) {
     }
   })
 
+  // Check if players are ready before starting game.
   socket.on('check player status', async (isReady, id, mode) => {
     const sockets = await io.to(`lobby_${id}`).fetchSockets();
     socket.data.user.isReady = isReady;
     
+
+    // Player is ready.
     if (isReady) {
+      // Emit event to turn off queue timer from client.
       socket.emit('player status received');
-      // Check other player's ready status
+      // Check other player's ready status.
       for (const player of sockets) {
         if (!player.data.user.isReady) {
           return;
         }
       }
+      // Both players are ready.
       
-      // Move everyone to a live match room
+      // Move everyone to a match room.
       io.in(`lobby_${id}`).socketsJoin(`match_${id}`);
       io.in(`match_${id}`).socketsLeave(`lobby_${id}`);
       
-      // Generate random 5 letter word
+      // Generate a random 5 letter word.
       let word;
       let rightLength = false;
       while (!rightLength) {
@@ -158,25 +175,27 @@ io.on('connection', function(socket) {
         }
       }
       
+      // Create array with user information.
       let players = [];
       players.push(sockets[0].data.user);
       players.push(sockets[1].data.user);
 
-      const now = new Date();
+      // Store today's date.
+      const today = new Date();
 
-      // Add match document to mongodb
+      // Create object and add match document to mongoDB.
       const match = new Match({
         match_id: id,
         mode,
         word,
         players,
-        date: dateFormat(now, 'mm/dd/yy')
+        date: dateFormat(today, 'mm/dd/yy')
       })
-
       match.save((err) => {
         if (err) {
           console.log(err);
         }
+        // Success - send socket information of both players.
         io.to(`match_${id}`).emit('start match',
           [
             {
@@ -193,7 +212,7 @@ io.on('connection', function(socket) {
         );
       })
     }
-    // if player is not ready, emit match cancelled
+    // Player is not ready. Notify client and cancel match.
     if (!isReady) {
       io.to(`lobby_${id}`).emit('cancel match');
       io.to(`lobby_${id}`).emit('player status received');
@@ -201,7 +220,9 @@ io.on('connection', function(socket) {
     }
   })  
 
+  // Handle answer submission.
   socket.on('check answer', (id, input) => {
+    // Retrieve match information.
     Match.findOne({match_id: id}, async (err, result) => {
       if (err) {
         console.log(err);
@@ -209,9 +230,10 @@ io.on('connection', function(socket) {
       const answer = result.word;
       const arr = [];
 
+      // Answer is correct.
       if (input === answer) {
+        // Mode is ranked. Calculate and update ratings for both players. 
         if (result.mode === 'ranked') {
-          // Get the socket list
           let opponent;
           let oppRating;
           let thisRating = socket.data.user.rating;
@@ -220,8 +242,12 @@ io.on('connection', function(socket) {
             if (player.id !== socket.id) {
               opponent = player.data.user;
               oppRating = player.data.user.rating;
+
+              // Gain less rating if opponent has less rating and vice versa.
               thisRating += Math.round(15 * oppRating / thisRating);
               oppRating -= Math.round(15 * oppRating / thisRating);
+
+              // Set 100 as the minimum rating.
               if (oppRating < 100) {
                 oppRating = 100;
               }
@@ -266,6 +292,7 @@ io.on('connection', function(socket) {
               if (err) {
                 console.log(err);
               }
+              // Success - emit event and send information post match.
               io.to(`match_${id}`).emit(
                 'end match',
                 {
@@ -284,15 +311,19 @@ io.on('connection', function(socket) {
                   ]
                 }
               )
+
               io.socketsLeave(`match_${id}`);
             }
           )
         }
+        // Mode is normal. Update fields in a match document.
         if (result.mode === 'normal') {
           Match.findOneAndUpdate({match_id: id}, {$set: {result: socket.data.user.username}}, (err) => {
             if (err) {
               console.log(err);
             }
+
+            // Success - emit event and send post match information.
             io.to(`match_${id}`).emit(
               'end match', 
               {
@@ -304,7 +335,9 @@ io.on('connection', function(socket) {
           })
         }
       } else {
+        // Answer is incorrect. Give hints by assigning each letter a color.
         outerloop: for (let i = 0; i < 5; i++) {
+          // Same letter at same index.
           if (input.charAt(i) === answer.charAt(i)) {
             arr.push({
               letter: input.charAt(i),
@@ -313,6 +346,7 @@ io.on('connection', function(socket) {
             continue;
           }
           for (let j = 0; j < 5; j++) {
+            // Same letter but different index.
             if (input.charAt(i) === answer.charAt(j)) {
               arr.push({
                 letter: input.charAt(i),
@@ -321,11 +355,13 @@ io.on('connection', function(socket) {
               continue outerloop;
             }
           }
+          // Letter does not exist.
           arr.push({
             letter: input.charAt(i),
             color: 'gray'
           })
         }
+        // Emit event and send array with hints.
         io.to(`match_${id}`).emit('incorrect', {
           arr, 
           user: socket.data.user.username 
@@ -334,8 +370,11 @@ io.on('connection', function(socket) {
     })
   })
 
+  // Handle events when players have 0 more attempts or are out of time.
   socket.on('stalemate', async (id, mode) => {
     socket.data.user.stalemate = true;
+
+    // Store opponent's User information.
     let opponent;
     const sockets = await io.to(`match_${id}`).fetchSockets();
     for (const player of sockets) {
@@ -346,7 +385,9 @@ io.on('connection', function(socket) {
         return;
       }
     }
+    // Both players are in stalemate.
 
+    // Mode is in ranked. Update both players' profile.
     if (mode === 'ranked') {
       async.parallel(
         {
@@ -387,15 +428,19 @@ io.on('connection', function(socket) {
           if (err) {
             console.log(err);
           }
+
+          // Success - emit event to end match and send post match information.
           io.to(`match_${id}`).emit('end match', {
             winner: 'none',
             word: result.match.word
           });
+
           io.socketsLeave(`match_${id}`);
         }
       )
     }
 
+    // Mode is normal. Send post match information to both players.
     if (mode === 'normal') {
       Match.findOne({match_id: id}, (err, match) => {
         if (err) {
@@ -410,6 +455,7 @@ io.on('connection', function(socket) {
     }
   })
 
+  // Handle socket disconnect. Clean up event listeners.
   socket.on('disconnect', function() {
     ee.emit('player disconnected');
     ee.removeListener('player disconnected', handleDisconnect);
@@ -420,23 +466,25 @@ io.on('connection', function(socket) {
     ee.removeListener('trigger pairing: ranked', rankedMatch);
   })
 
+  // Handle player disconnecting in ranked match.
   async function handleDisconnect() {
     const id = socket.data.roomID;
     const sockets = await io.to(`match_${id}`).fetchSockets();
     console.log(sockets.length);
-    if (sockets.length > 0 && socket.id !== sockets[0].id){
+    // Prevent handleDisconnect from running twice.
+    if (sockets.length > 0 && socket.id !== sockets[0].id) {
       Match.findOne({match_id: id}, (err, match) => {
         if (err) {
           console.log(err);
         }
+
+        // Mode is ranked. Calculate and update rating for both players.
         if (match.mode === 'ranked') {
           const opponent = sockets[0].data.user;
           thisRating = socket.data.user.rating;
           oppRating = opponent.rating;
-
           thisRating -= 30;
           oppRating += 15;
-
           async.parallel(
             {
               match(callback) {
@@ -478,6 +526,8 @@ io.on('connection', function(socket) {
               if (err) {
                 console.log(err);
               }
+
+              // Success - send post match information.
               io.to(`match_${id}`).emit(
                 'end match',
                 {
@@ -501,14 +551,17 @@ io.on('connection', function(socket) {
             }
           )
         }
+        // Mode is normal.
         if (match.mode === 'normal') {
           for (const player of sockets) {
-            // if other player is in stalemate, end match
             if (player.data.user.stalemate) {
+              // Opponent is in stalemate. End match.
               Match.findOneAndUpdate({match_id: id}, {$set: {result: 'draw'}}, (err, result) => {
                 if (err) {
                   console.log(err);
                 }
+
+                // Success - Emit event and send post match information.
                 io.to(`match_${id}`).emit('end match', {
                   winner: 'none',
                   word: result.word
@@ -523,6 +576,7 @@ io.on('connection', function(socket) {
     }
   }
 
+  // Handle matching in normal queue.
   async function normMatch() {
     const sockets = await io.in('waiting room: normal').fetchSockets();
     if (sockets.length >= 2 && sockets[0].id == socket.id) {
@@ -532,17 +586,21 @@ io.on('connection', function(socket) {
     }
   }
 
+  // Handle pairing in normal queue
   async function normPairing(socketsList) {
+    // Generate random id.
     const id = uniqid();
+
+    // Move first and second sockets to a lobby.
     socket.leave('waiting room: normal')
     socketsList[1].leave('waiting room: normal');
-  
     socket.join(`lobby_${id}`);
     socketsList[1].join(`lobby_${id}`);
   
+    // Notify client that match is found.
     io.to(`lobby_${id}`).emit('match found', id);
   
-    // Add id to data property in each socket
+    // Add id to data property in each socket.
     const players = await io.in(`lobby_${id}`).fetchSockets();
     console.log(`users in lobby_${id}:`)
     for (const player of players) {
@@ -551,16 +609,22 @@ io.on('connection', function(socket) {
     }
   }
 
+  // Handle matching in ranked queue. 
   async function rankedMatch() {
     const sockets = await io.in('waiting room: ranked').fetchSockets();
     if (sockets.length >= 2 && sockets[0].id == socket.id) {
+      // First socket initiates the pairing.
       rankedPairing(sockets);
       ee.emit('trigger pairing: ranked');
     }
   }
 
+  // Handle pairing in ranked queue.
   async function rankedPairing(socketsList) {
+    // Generate random id.
     const id = uniqid();
+
+    // Store socket with nearest rating in min.
     let min;
     for (let i = 1; i < socketsList.length; i++) {
       const current = socketsList[i];
@@ -572,18 +636,19 @@ io.on('connection', function(socket) {
       const socketRating = socket.data.user.rating;
       const minRating = min.data.user.rating;
       
+      // Calculate rating differences.
       const minDiff = Math.abs(minRating, socketRating);
       const currentDiff = Math.abs(curRating, socketRating);
 
       if (currentDiff < minDiff) {
         min = current;
-      } 
+      }
     }
+
+    // Move current socket and socket with minimum rating difference.
     socket.join(`lobby_${id}`);
     min.join(`lobby_${id}`);
-
     io.in(`lobby_${id}`).socketsLeave('waiting room: ranked');
-
     io.to(`lobby_${id}`).emit('match found', id);
 
     // Add id to data property in each socket in this lobby

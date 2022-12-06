@@ -4,11 +4,14 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const uniqid = require('uniqid'); 
 
+
 exports.user_create_get = (req, res) => {
   res.render('sign-up-form');
 }
 
+// Handle User create on POST.
 exports.user_create_post = [
+  // Sanitize and validate Username.
   body('username')
     .trim()
     .isLength({min: 1})
@@ -17,6 +20,7 @@ exports.user_create_post = [
     .withMessage('Username must contain alphabets or numbers')
     .isLength({min: 8})
     .withMessage('Username must be 8 characters or more'),
+  // Sanittize and validate Password.  
   body('password')
     .trim()
     .isLength({min: 1})
@@ -27,6 +31,7 @@ exports.user_create_post = [
     .withMessage('Password must be 8 characters or more'),
   
   (req, res, next) => {
+    // Check if username already exists.
     User.findOne({username: req.body.username}, (err, user) => {
       if (err) {
         console.log(err);
@@ -39,15 +44,17 @@ exports.user_create_post = [
   },
   
   (req, res, next) => {
+    // Extract the validation errors from a request.
     const errors = validationResult(req);
 
+    // There are errors. Send error messages in JSON.
     if (!errors.isEmpty()) {
       res.json({
         errors: errors.array()
       })
       return;
     }
-
+    // Username already exists. Send error message in JSON.
     if (req.body.error) {
       res.json({
         error: req.body.error
@@ -59,6 +66,7 @@ exports.user_create_post = [
       if (err) {
         return next(err);
       }
+      // Store hash to mongoDB.
       const id = uniqid();
       const user = new User({
         id,
@@ -84,21 +92,24 @@ exports.user_create_post = [
 exports.user_login_get = function(req, res, next) {
   res.render('index', {user: req.user});
 }
-
+// Handle login on POST.
 exports.user_login_post = (req, res, next) => {
+  // Check for username.
   User.findOne({username: req.body.username}, (err, account) => {
     if (err) {
       return next(err);
     }
+    // Username does not match. Send message in JSON.
     if (!account) {
       return res.json({message: 'Incorrect username or password'});
     }
+    // Username does match. Check and compare hashed password.
     bcrypt.compare(req.body.password, account.password, (err, result) => {
       if (err) {
         return next(err);
       }
       if (result) {
-        // if passwords match, log user in
+        // Passwords matched. Send a JWT.
         const user = {
           id: account.id,
           username: account.username,
@@ -110,13 +121,14 @@ exports.user_login_post = (req, res, next) => {
           return res.json({token});
         })
       } else {
-        // passwords do not match!
+        // Password do not match. Send error message.
         return res.status(400).json({message: 'incorrect username or password'});
       }
     })
   })
 }
 
+// Handle User update on POST.
 exports.user_update_post = [
   (req, res, next) => {
     jwt.verify(
@@ -132,6 +144,7 @@ exports.user_update_post = [
     )
   },
 
+  // Check if username already exist.
   (req, res, next) => {
     User.findOne({username: req.body.username}, (err, user) => {
       if (err) {
@@ -144,6 +157,7 @@ exports.user_update_post = [
     })
   },
 
+  // Validate and sanitize fields
   body('username')
     .trim()
     .isLength({min: 1})
@@ -162,8 +176,10 @@ exports.user_update_post = [
     .withMessage('Display name must contain alphabets or numbers'),
   
   (req, res, next) => {
+    // Extract validation errors from request.
     const errors = validationResult(req);
     
+    // There are errors. Send error messages in JSON.
     if (!errors.isEmpty()) {
       res.json({errors: errors.array()});
       return;
@@ -172,7 +188,9 @@ exports.user_update_post = [
       res.json({error: req.body.error});
       return;
     }
+    // Data from form is valid.
     
+    // Update fields with escaped and trimmed data.
     User.findOneAndUpdate(
       {id: req.params.id},
       {$set: {
@@ -183,6 +201,7 @@ exports.user_update_post = [
         if (err) {
           console.log(err);
         }
+        // Success - send status in JSON.
         res.json({status: 200});
       }
     )
@@ -190,9 +209,11 @@ exports.user_update_post = [
 
 ]
 
+
 exports.verifyToken = (req, res, next) => {
   const bearerHeader = req.headers['authorization'];
   if (typeof bearerHeader !== 'undefined') {
+    // Authorization field exists. Extract and store token.
     const bearer = bearerHeader.split(' ');
     const bearerToken = bearer[1];
     req.token = bearerToken;
@@ -202,6 +223,7 @@ exports.verifyToken = (req, res, next) => {
 
 // API Routes
 
+// Send leaderboard data on GET.
 exports.leaderboard_get = (req, res) => {
   User.find({}, 'displayName rating')
     .sort({'rating': -1})
@@ -214,6 +236,7 @@ exports.leaderboard_get = (req, res) => {
     })
 }
 
+// Send User data on GET.
 exports.profile_get = (req, res) => {
   jwt.verify(
     req.token, 
