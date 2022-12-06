@@ -334,7 +334,7 @@ io.on('connection', function(socket) {
     })
   })
 
-  socket.on('stalemate', async (id) => {
+  socket.on('stalemate', async (id, mode) => {
     socket.data.user.stalemate = true;
     let opponent;
     const sockets = await io.to(`match_${id}`).fetchSockets();
@@ -347,52 +347,67 @@ io.on('connection', function(socket) {
       }
     }
 
-    async.parallel(
-      {
-        match(callback) {
-          Match.findOneAndUpdate(
-            {
-              match_id: id
-            }, 
-            {
-              $set: {result: 'draw'}
-            }
-          ).exec(callback);
+    if (mode === 'ranked') {
+      async.parallel(
+        {
+          match(callback) {
+            Match.findOneAndUpdate(
+              {
+                match_id: id
+              }, 
+              {
+                $set: {result: 'draw'}
+              }
+            ).exec(callback);
+          },
+  
+          user1(callback) {
+            User.findOneAndUpdate(
+              {
+                id: socket.data.user.id
+              },
+              {
+                $inc: {draws: 1, games: 1}
+              }
+            ).exec(callback);
+          },
+  
+          user2(callback) {
+            User.findOneAndUpdate(
+              {
+                id: opponent.id
+              },
+              {
+                $inc: {draws: 1, games: 1}
+              }
+            ).exec(callback);
+          }
         },
-
-        user1(callback) {
-          User.findOneAndUpdate(
-            {
-              id: socket.data.user.id
-            },
-            {
-              $inc: {draws: 1, games: 1}
-            }
-          ).exec(callback);
-        },
-
-        user2(callback) {
-          User.findOneAndUpdate(
-            {
-              id: opponent.id
-            },
-            {
-              $inc: {draws: 1, games: 1}
-            }
-          ).exec(callback);
+        (err, result) => {
+          if (err) {
+            console.log(err);
+          }
+          io.to(`match_${id}`).emit('end match', {
+            winner: 'none',
+            word: result.match.word
+          });
+          io.socketsLeave(`match_${id}`);
         }
-      },
-      (err, result) => {
+      )
+    }
+
+    if (mode === 'normal') {
+      Match.findOne({match_id: id}, (err, match) => {
         if (err) {
           console.log(err);
         }
         io.to(`match_${id}`).emit('end match', {
           winner: 'none',
-          word: result.match.word
+          word: match.word
         });
         io.socketsLeave(`match_${id}`);
-      }
-    )
+      })
+    }
   })
 
   socket.on('disconnect', function() {

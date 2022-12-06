@@ -91,7 +91,7 @@ exports.user_login_post = (req, res, next) => {
       return next(err);
     }
     if (!account) {
-      return res.json({message: 'incorrect username or password'});
+      return res.json({message: 'Incorrect username or password'});
     }
     bcrypt.compare(req.body.password, account.password, (err, result) => {
       if (err) {
