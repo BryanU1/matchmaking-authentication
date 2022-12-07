@@ -664,5 +664,4 @@ io.on('connection', function(socket) {
 
 server.listen(process.env.PORT || 3000, () => {
   console.log("app listening on port 3000!");
-  console.log(process.env.PASSWORD);
 });
