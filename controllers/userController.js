@@ -4,6 +4,11 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const uniqid = require('uniqid'); 
 
+
+exports.user_create_get = (req, res) => {
+  res.render('sign-up-form');
+}
+
 // Handle User create on POST.
 exports.user_create_post = [
   // Sanitize and validate Username.
@@ -84,6 +89,9 @@ exports.user_create_post = [
   }
 ]
 
+exports.user_login_get = function(req, res, next) {
+  res.render('index', {user: req.user});
+}
 // Handle login on POST.
 exports.user_login_post = (req, res, next) => {
   // Check for username.
