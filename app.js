@@ -5,7 +5,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
-    origin: "https://competitive-wordle.herokuapp.com/",
+    origin: "https://competitive-wordle.herokuapp.com",
     methods: ["GET", "POST"]
   }
 });
